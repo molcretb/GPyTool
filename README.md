@@ -12,53 +12,120 @@ Original GP-FBM study: Oliveira, G.M., Oravecz, A., Kobi, D. et al. Precise meas
 
 ### Dependencies
 
-* Describe any prerequisites, libraries, OS version, etc., needed before installing program.
-* ex. Windows 10
+* GPyTool uses functions from the classical Python libraries Pandas, Scipy, Numpy and Matplotlib.
+* The TKinter Python library is used to select the input trajectory files, but could be skipped if the path of these files is provided.
 
 ### Installing
 
-* How/where to download your program
-* Any modifications needed to be made to files/folders
+* Download the GPyTool functions from the file GPyTool_functions.py
+* Trajectory data files for demonstration are provided in the folder demo_data; alternatively, you can use your own trajectory file in CSV format (TXY - Time, X, Y - for 2D trajectory; TXYZ - Time, X, Y, Z - for 3D trajectory) or XML format (following the parsing from Icy software after tracking analysis, see example in the demo_data folder)
 
 ### Executing program
 
-* How to run the program
-* Step-by-step bullets
+Import the Python libraries
 ```
-code blocks for commands
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+from pathlib import Path
+import tkinter
+from tkinter.filedialog import asksaveasfile, askopenfilenames
+import re
+import ntpath
+import os.path
+from matplotlib import colors
+import time
+import json
+from GPyTool_functions import *
+```
+Set the time and spatial calibrations (physical size of a pixel in µm - calib_px) and (delay between two consecutive frames in seconds - calib_fr). The diffusion coefficient is directly linked to these calibrations (not the alpha anomalous exponent).
+```
+calib_px = 0.11 #1 px = 0.11 µm
+calib_fr = 0.5 #1 frame = 0.5 s
+```
+The following part is used to process couple trajectories, with subtrate correction. Skip it if you want to process individually the trajectories (no substrate correction). The script first asks you to select a CSV file containing the names of the trajectory files (for example '260523_C36_tracer_1_SCR_CH1.xml'), two columns format; the header of this CSV file is 'traj_1,traj_2'. Each row corresponds to a run of GPyTool between the two trajectories mentionned in the two columns. For example, the row '260523_C36_tracer_1_SCR_CH1.xml' and '260523_C36_tracer_1_Sox2_CH1.xml' will analyze these two trajectories together, with substrate correction. the trajectories are expected to be CSV files (TXY or TXYZ formats) or XML (parsing from Icy software after tracking analysis) and they need to be located in the same folder as the CSV list file. After selecting the CSV file containing all the couples trajectories, the analysis starts. After each iteration of the script, a json file with the processed trajectories is saved in the same folder as the previous CSV file, with name 'results_XXXXXXXXX.json', where 'XXXXXXX' is a random number (used to avoid erasing previous results from previous analysis). At the end of the script, you get 'Done!'. During the process, some error message 'RuntimeWarning' can appear, but they do not perturb the analysis: they come from the minimization of a cost function. The final json file contains all the couple trajectories results: for each couple, the names of the two trajectories are saved, their anomalous exponents and diffusion coefficients with susbtrate correction, the alpha and D from the substrate itself and the estimated trajectory of the substrate.
+```
+results_json = gpytool_couple(calib_px, calib_fr)
+```
+The following part should be used to process each trajectory individually (no substrate correction). The output is a CSV file with the following structure: trajectory name (traj_ID), alpha exponent, diffusion coefficient (in µm²/s**alpha)
+Just select the trajectories (csv or xml; xml parsing from Icy software after tracking analysis) and fill the name of the CSV results file.
+```
+results_csv = gpytool(calib_px, calib_fr)
 ```
 
-## Help
+## GPyTool with trajectory generator
+Use the following scripts to generate stochastic trajectories with defined parameters :
+N : trajectory length (number of time points);
+D : diffusion coefficient;
+alpha : anomalous exponent for diffusion
 
-Any advise for common problems or issues.
+Load the Python libraries
 ```
-command to run if program contains helper info
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+from pathlib import Path
+import tkinter
+from tkinter.filedialog import asksaveasfile, askopenfilenames
+import re
+import ntpath
+import os.path
+from matplotlib import colors
+import time
+import json
+from GPyTool_functions import *
+```
+Set trajectories' parameters
+```
+N = 400 #trajectory length
+alpha_1 = 0.45 #alpha trajectory 1
+alpha_2 = 0.65 #alpha trajectory 2
+alpha_back = 1.3 #alpha substrate motion
+D_1 = 1 #diffusion coefficient trajectory 1
+D_2 = 1 #diffusion coefficient trajectory 2
+D_back = 1 #diffusion coefficient substrate motion
+```
+Generate two 2D trajectories with common substrate motion.
+```
+traj_back = generate_2Dtraj(N,D_back,alpha_back)
+traj_1 = generate_2Dtraj(N,D_1,alpha_1)
+traj_2 = generate_2Dtraj(N,D_2,alpha_2);
+```
+Or two 3D trajectories with common substrate motion
+```
+traj_back = generate_3Dtraj(N,D_back,alpha_back)
+traj_1 = generate_3Dtraj(N,D_1,alpha_1)
+traj_2 = generate_3Dtraj(N,D_2,alpha_2);
+```
+Run GPyTool on these two couple trajectories.
+```
+[res, traj_back_exp] = get_D_alpha_couple(traj_1+traj_back,traj_2+traj_back)
+print('alpha_1 = '+str(res.x[1]))
+print('D_1 = '+str(res.x[0]))
+print('alpha_2 = '+str(res.x[3]))
+print('D_2 = '+str(res.x[2]))
+print('alpha_3 = '+str(res.x[5]))
+print('D_3 = '+str(res.x[4]))
+```
+Plot the GP estimate of the substrate motion and compare to the ground truth.
+```
+y_label = ['X axis', 'Y axis', 'Z axis']
+for i in range(traj_back_exp.shape[1]):
+    plt.figure();plt.plot(traj_back_exp[:,i],label=('GP estimate'));plt.plot(traj_back[:,i]-np.mean(traj_back-traj_back_exp,axis = 0)[i],'--',label=('Ground truth'));
+    plt.xlabel('Time');plt.ylabel(y_label[i]);plt.legend()
 ```
 
 ## Authors
 
-Contributors names and contact info
-
-ex. Dominique Pizzie  
-ex. [@DomPizzie](https://twitter.com/dompizzie)
+Bastien Molcrette, Guilherme Monteiro Oliveira, Nacho Molina, Thomas Sexton (sexton@igbmc.fr)
 
 ## Version History
 
-* 0.2
-    * Various bug fixes and optimizations
-    * See [commit change]() or See [release history]()
 * 0.1
     * Initial Release
 
 ## License
 
-This project is licensed under the [NAME HERE] License - see the LICENSE.md file for details
-
-## Acknowledgments
-
-Inspiration, code snippets, etc.
-* [awesome-readme](https://github.com/matiassingers/awesome-readme)
-* [PurpleBooth](https://gist.github.com/PurpleBooth/109311bb0361f32d87a2)
-* [dbader](https://github.com/dbader/readme-template)
-* [zenorocha](https://gist.github.com/zenorocha/4526327)
-* [fvcproductions](https://gist.github.com/fvcproductions/1bfc2d4aecb01a834b46)
+This project is licensed under the MIT License - see the LICENSE.md file for details
