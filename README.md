@@ -13,11 +13,11 @@ Original GP-FBM study: Oliveira, G.M., Oravecz, A., Kobi, D. et al. Precise meas
 ### Dependencies
 
 * GPyTool uses functions from the classical Python libraries Pandas, Scipy, Numpy and Matplotlib.
-* The TKinter Python library is used to select the input trajectory files, but could be skipped if the path of these files is provided.
+* The TKinter Python library is used to select the input trajectory files, but could be skipped if the path of these files is provided (not implemented, please open an issue if you are interested in this implementation).
 
 ### Installing
 
-* Download the GPyTool functions from the file GPyTool_functions.py
+* Download the GPyTool functions from the file GPyTool_functions.py in the Script folder
 * Trajectory data files for demonstration are provided in the folder demo_data; alternatively, you can use your own trajectory file in CSV format (TXY - Time, X, Y - for 2D trajectory; TXYZ - Time, X, Y, Z - for 3D trajectory) or XML format (following the parsing from Icy software after tracking analysis, see example in the demo_data folder)
 
 ### Executing program
@@ -39,21 +39,43 @@ import time
 import json
 from GPyTool_functions import *
 ```
-Set the time and spatial calibrations (physical size of a pixel in µm - calib_px) and (delay between two consecutive frames in seconds - calib_fr). The diffusion coefficient is directly linked to these calibrations (not the alpha anomalous exponent).
+The script assumes that the trajectories are already calibrated in their respective physical units. If this is not the case, you can calibrate the trajectories for this analysis by providing optional arguments calib_px (X/Y-pixel calibration), calib_fr (temporal calibration) or calib_px_z (Z-pixel calibration, for 3D trajectories).
+
+Note that these calibrations directly impact the value of the diffusion coefficient (not the alpha anomalous exponent, as it is a dimensionless parameter).
+
+For example, for uncalibrated trajectories, with pixel size = 0.11 nm and 1 frame = 0.5 seconds:
 ```
-calib_px = 0.11 #1 px = 0.11 µm
-calib_fr = 0.5 #1 frame = 0.5 s
+gpytool(calib_px=0.11, calib_fr=0.5)
 ```
-The following part is used to process couple trajectories, with subtrate correction. Skip it if you want to process individually the trajectories (no substrate correction). The script first asks you to select a CSV file containing the names of the trajectory files (for example '260523_C36_tracer_1_SCR_CH1.xml'), two columns format; the header of this CSV file is 'traj_1,traj_2'. Each row corresponds to a run of GPyTool between the two trajectories mentionned in the two columns. For example, the row '260523_C36_tracer_1_SCR_CH1.xml' and '260523_C36_tracer_1_Sox2_CH1.xml' will analyze these two trajectories together, with substrate correction. the trajectories are expected to be CSV files (TXY or TXYZ formats) or XML (parsing from Icy software after tracking analysis) and they need to be located in the same folder as the CSV list file. After selecting the CSV file containing all the couples trajectories, the analysis starts. After each iteration of the script, a json file with the processed trajectories is saved in the same folder as the previous CSV file, with name 'results_XXXXXXXXX.json', where 'XXXXXXX' is a random number (used to avoid erasing previous results from previous analysis). At the end of the script, you get 'Done!'. During the process, some error message 'RuntimeWarning' can appear, but they do not perturb the analysis: they come from the minimization of a cost function. The final json file contains all the couple trajectories results: for each couple, the names of the two trajectories are saved, their anomalous exponents and diffusion coefficients with susbtrate correction, the alpha and D from the substrate itself and the estimated trajectory of the substrate.
+The following part is used to process couple trajectories, with subtrate correction. Skip it if you want to process individually the trajectories (no substrate correction).
+
+The script first asks you to select a CSV file containing the names of the trajectory files (for example '260523_C36_tracer_1_SCR_CH1.xml'), two columns format; the header of this CSV file is 'traj_1,traj_2'. Each row corresponds to a run of GPyTool between the two trajectories mentionned in the two columns. For example, the row '260523_C36_tracer_1_SCR_CH1.xml' and '260523_C36_tracer_1_Sox2_CH1.xml' will analyze these two trajectories together, with substrate correction. the trajectories are expected to be CSV files (TXY or TXYZ formats) or XML (parsing from Icy software after tracking analysis) and they need to be located in the same folder as the CSV list file.
+
+After selecting the CSV file containing all the couples trajectories, the analysis starts. After each iteration of the script, a json file with the processed trajectories is saved in the same folder as the previous CSV file, with name 'results_XXXXXXXXX.json', where 'XXXXXXX' is a random number (used to avoid erasing previous results from previous analysis). At the end of the script, you get 'Done!'.
+
+During the process, some error message 'RuntimeWarning' can appear, but they do not perturb the analysis: they come from the minimization of a cost function.
+
+The final json file contains all the couple trajectories results: for each couple, the names of the two trajectories are saved, their anomalous exponents and diffusion coefficients with susbtrate correction, the alpha and D from the substrate itself, the length of the synchronized trajectories (in case the trajectories have gaps between them, to assess the quality of alpha/D estimations), and the estimated trajectory of the substrate.
 ```
-results_json = gpytool_couple(calib_px, calib_fr)
+results_json = gpytool_couple() # assuming the trajectories are already calibrated
 ```
-The following part should be used to process each trajectory individually (no substrate correction). The output is a CSV file with the following structure: trajectory name (traj_ID), alpha exponent, diffusion coefficient (in µm²/s**alpha)
+The following part should be used to process each trajectory individually (no substrate correction). The output is a CSV file with the following structure: trajectory name (traj_ID), alpha exponent, diffusion coefficient (in µm²/s**alpha), length of trajectory.
+
 Just select the trajectories (csv or xml; xml parsing from Icy software after tracking analysis) and fill the name of the CSV results file.
 ```
-results_csv = gpytool(calib_px, calib_fr)
+results_csv = gpytool() # assuming the trajectories are already calibrated
 ```
+## Conversion of Icy-parsed XML files to CSV format
+The XML parsing used is the one from the Icy image analysis software when using the Track manager plugin: https://icy.bioimageanalysis.org/plugin/track-manager/
 
+You can use either Icy-parsed XML or CSV files as input trajectories for GPyTool; however, for interoperability purposes, we encourage users to use CSV format, as a standard for single-particle tracking trajectory data.
+
+To convert your Icy-parsed XML files into CSV, you can use the script 'converter_IcyXML2CSV.py' in the Script folder, which contains a function called 'IcyXML2CSV' that perform the conversion.
+
+Simply compile the script 'converter_IcyXML2CSV.py' or run the following script; the function doesn't take any argument and returns None. A TKinter window first appears to aks you to select your XML files, and then iteratively runs the conversion over each file of the list. The CSV files are saved at the same location as their XML versions with the same basename.
+```
+IcyXML2CSV()
+```
 ## GPyTool with trajectory generator
 Use the following scripts to generate stochastic trajectories with defined parameters :
 N : trajectory length (number of time points);
